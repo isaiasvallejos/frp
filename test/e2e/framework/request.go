@@ -28,6 +28,10 @@ func ExpectRequestError(protocol string, port int, in []byte, timeout time.Durat
 	}
 }
 
+// TODO
+// Replace with functional options
+// Support HTTP Proxy
+
 func ExpectTCPRequest(port int, in, out []byte, timeout time.Duration, explain ...interface{}) {
 	res, err := request.SendTCPRequest(port, in, timeout)
 	ExpectNoError(err, explain...)

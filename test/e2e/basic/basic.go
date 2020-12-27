@@ -7,6 +7,7 @@ import (
 
 	"github.com/fatedier/frp/test/e2e/framework"
 	"github.com/fatedier/frp/test/e2e/framework/consts"
+	"github.com/fatedier/frp/test/e2e/pkg/port"
 
 	. "github.com/onsi/ginkgo"
 )
@@ -50,21 +51,21 @@ var _ = Describe("[Feature: Basic]", func() {
 				}{
 					{
 						proxyName: "normal",
-						portName:  framework.GenPortName("Normal"),
+						portName:  port.GenName("Normal"),
 					},
 					{
 						proxyName:   "with-encryption",
-						portName:    framework.GenPortName("WithEncryption"),
+						portName:    port.GenName("WithEncryption"),
 						extraConfig: "use_encryption = true",
 					},
 					{
 						proxyName:   "with-compression",
-						portName:    framework.GenPortName("WithCompression"),
+						portName:    port.GenName("WithCompression"),
 						extraConfig: "use_compression = true",
 					},
 					{
 						proxyName: "with-encryption-and-compression",
-						portName:  framework.GenPortName("WithEncryptionAndCompression"),
+						portName:  port.GenName("WithEncryptionAndCompression"),
 						extraConfig: `
 						use_encryption = true
 						use_compression = true
@@ -139,24 +140,24 @@ var _ = Describe("[Feature: Basic]", func() {
 				}{
 					{
 						proxyName:    "normal",
-						bindPortName: framework.GenPortName("Normal"),
+						bindPortName: port.GenName("Normal"),
 						visitorSK:    correctSK,
 					},
 					{
 						proxyName:    "with-encryption",
-						bindPortName: framework.GenPortName("WithEncryption"),
+						bindPortName: port.GenName("WithEncryption"),
 						visitorSK:    correctSK,
 						extraConfig:  "use_encryption = true",
 					},
 					{
 						proxyName:    "with-compression",
-						bindPortName: framework.GenPortName("WithCompression"),
+						bindPortName: port.GenName("WithCompression"),
 						visitorSK:    correctSK,
 						extraConfig:  "use_compression = true",
 					},
 					{
 						proxyName:    "with-encryption-and-compression",
-						bindPortName: framework.GenPortName("WithEncryptionAndCompression"),
+						bindPortName: port.GenName("WithEncryptionAndCompression"),
 						visitorSK:    correctSK,
 						extraConfig: `
 						use_encryption = true
@@ -165,7 +166,7 @@ var _ = Describe("[Feature: Basic]", func() {
 					},
 					{
 						proxyName:    "with-error-sk",
-						bindPortName: framework.GenPortName("WithErrorSK"),
+						bindPortName: port.GenName("WithErrorSK"),
 						visitorSK:    wrongSK,
 						expectError:  true,
 					},
@@ -194,5 +195,68 @@ var _ = Describe("[Feature: Basic]", func() {
 				}
 			})
 		}
+	})
+
+	Describe("TCPMUX", func() {
+		It("Type tcpmux", func() {
+			serverConf := consts.DefaultServerConfig
+			clientConf := consts.DefaultClientConfig
+
+			tcpmuxHTTPConnectPortName := port.GenName("TCPMUX")
+			serverConf += fmt.Sprintf(`
+			tcpmux_httpconnect_port = {{ .%s }}
+			`, tcpmuxHTTPConnectPortName)
+
+			getProxyConf := func(proxyName string, extra string) string {
+				return fmt.Sprintf(`
+				[%s]
+				type = tcpmux
+				multiplexer = httpconnect
+				local_port = {{ .%s }}
+				custom_domains = %s
+				`+extra, proxyName, framework.TCPEchoServerPort, proxyName)
+			}
+
+			tests := []struct {
+				proxyName   string
+				portName    string
+				extraConfig string
+			}{
+				{
+					proxyName: "normal",
+				},
+				{
+					proxyName:   "with-encryption",
+					extraConfig: "use_encryption = true",
+				},
+				{
+					proxyName:   "with-compression",
+					extraConfig: "use_compression = true",
+				},
+				{
+					proxyName: "with-encryption-and-compression",
+					extraConfig: `
+						use_encryption = true
+						use_compression = true
+					`,
+				},
+			}
+
+			// build all client config
+			for _, test := range tests {
+				clientConf += getProxyConf(test.proxyName, test.extraConfig) + "\n"
+			}
+			// run frps and frpc
+			f.RunProcesses([]string{serverConf}, []string{clientConf})
+
+			// Request without HTTP connect should get error
+			framework.ExpectTCPRequestError(f.UsedPorts[tcpmuxHTTPConnectPortName],
+				[]byte(consts.TestString), connTimeout, "request without HTTP connect")
+			for _, test := range tests {
+				// TODO
+				framework.ExpectTCPRequestError(f.UsedPorts[tcpmuxHTTPConnectPortName],
+					[]byte(consts.TestString), connTimeout, test.proxyName)
+			}
+		})
 	})
 })

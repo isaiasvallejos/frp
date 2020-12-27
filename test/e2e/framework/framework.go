@@ -151,7 +151,7 @@ func (f *Framework) genPortsFromTemplates(templates []string) (ports map[string]
 	}()
 
 	for name := range ports {
-		port := f.portAllocator.Get()
+		port := f.portAllocator.GetByName(name)
 		if port <= 0 {
 			return nil, fmt.Errorf("can't allocate port")
 		}

@@ -29,7 +29,10 @@ func SendUDPRequest(port int, content []byte, timeout time.Duration) (string, er
 }
 
 func sendRequestByConn(c net.Conn, content []byte) (string, error) {
-	c.Write(content)
+	_, err := c.Write(content)
+	if err != nil {
+		return "", fmt.Errorf("write error: %v", err)
+	}
 
 	buf := make([]byte, 2048)
 	n, err := c.Read(buf)

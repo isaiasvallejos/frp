@@ -6,6 +6,7 @@ import (
 
 	"github.com/fatedier/frp/test/e2e/framework"
 	"github.com/fatedier/frp/test/e2e/framework/consts"
+	"github.com/fatedier/frp/test/e2e/pkg/port"
 
 	. "github.com/onsi/ginkgo"
 )
@@ -16,6 +17,7 @@ type generalTestConfigures struct {
 	expectError bool
 }
 
+// defineClientServerTest test a normal tcp and udp proxy with specified TestConfigures.
 func defineClientServerTest(desc string, f *framework.Framework, configures *generalTestConfigures) {
 	It(desc, func() {
 		serverConf := consts.DefaultServerConfig
@@ -38,21 +40,21 @@ func defineClientServerTest(desc string, f *framework.Framework, configures *gen
 				local_port = {{ .%s }}
 				remote_port = {{ .%s }}
 				`, configures.client,
-			framework.TCPEchoServerPort, framework.GenPortName("TCP"),
-			framework.UDPEchoServerPort, framework.GenPortName("UDP"),
+			framework.TCPEchoServerPort, port.GenName("TCP"),
+			framework.UDPEchoServerPort, port.GenName("UDP"),
 		)
 
 		f.RunProcesses([]string{serverConf}, []string{clientConf})
 
 		if !configures.expectError {
-			framework.ExpectTCPRequest(f.UsedPorts[framework.GenPortName("TCP")],
+			framework.ExpectTCPRequest(f.UsedPorts[port.GenName("TCP")],
 				[]byte(consts.TestString), []byte(consts.TestString), connTimeout, "tcp proxy")
-			framework.ExpectUDPRequest(f.UsedPorts[framework.GenPortName("UDP")],
+			framework.ExpectUDPRequest(f.UsedPorts[port.GenName("UDP")],
 				[]byte(consts.TestString), []byte(consts.TestString), connTimeout, "udp proxy")
 		} else {
-			framework.ExpectTCPRequestError(f.UsedPorts[framework.GenPortName("TCP")],
+			framework.ExpectTCPRequestError(f.UsedPorts[port.GenName("TCP")],
 				[]byte(consts.TestString), connTimeout, "tcp proxy")
-			framework.ExpectUDPRequestError(f.UsedPorts[framework.GenPortName("UDP")],
+			framework.ExpectUDPRequestError(f.UsedPorts[port.GenName("UDP")],
 				[]byte(consts.TestString), connTimeout, "udp proxy")
 		}
 	})
