@@ -17,6 +17,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/fatedier/frp/pkg/msg"
 
@@ -34,8 +35,11 @@ type OidcClientConfig struct {
 	// is "".
 	OidcClientSecret string `ini:"oidc_client_secret" json:"oidc_client_secret"`
 	// OidcAudience specifies the audience of the token in OIDC authentication
-	//if AuthenticationMethod == "oidc". By default, this value is "".
+	// if AuthenticationMethod == "oidc". By default, this value is "".
 	OidcAudience string `ini:"oidc_audience" json:"oidc_audience"`
+	// OidcScope specifies the scope of the token in OIDC authentication
+	// if AuthenticationMethod == "oidc". By default, this value is "".
+	OidcScope string `ini:"oidc_scope" json:"oidc_scope"`
 	// OidcTokenEndpointURL specifies the URL which implements OIDC Token Endpoint.
 	// It will be used to get an OIDC token if AuthenticationMethod == "oidc".
 	// By default, this value is "".
@@ -47,6 +51,7 @@ func getDefaultOidcClientConf() OidcClientConfig {
 		OidcClientID:         "",
 		OidcClientSecret:     "",
 		OidcAudience:         "",
+		OidcScope:            "",
 		OidcTokenEndpointURL: "",
 	}
 }
@@ -62,6 +67,9 @@ type OidcServerConfig struct {
 	// It will be used when AuthenticationMethod == "oidc". By default, this
 	// value is "".
 	OidcAudience string `ini:"oidc_audience" json:"oidc_audience"`
+	// OidcScope specifies the scope OIDC tokens should contain when validated.
+	// By default, this value is false.
+	OidcScope string `ini:"oidc_scope" json:"oidc_scope"`
 	// OidcSkipExpiryCheck specifies whether to skip checking if the OIDC token is
 	// expired. It will be used when AuthenticationMethod == "oidc". By default, this
 	// value is false.
@@ -89,10 +97,11 @@ type OidcAuthProvider struct {
 
 func NewOidcAuthSetter(baseCfg BaseConfig, cfg OidcClientConfig) *OidcAuthProvider {
 	tokenGenerator := &clientcredentials.Config{
-		ClientID:     cfg.OidcClientID,
-		ClientSecret: cfg.OidcClientSecret,
-		Scopes:       []string{cfg.OidcAudience},
-		TokenURL:     cfg.OidcTokenEndpointURL,
+		ClientID:       cfg.OidcClientID,
+		ClientSecret:   cfg.OidcClientSecret,
+		Scopes:         []string{cfg.OidcScope},
+		TokenURL:       cfg.OidcTokenEndpointURL,
+		EndpointParams: url.Values{"audience": {cfg.OidcAudience}},
 	}
 
 	return &OidcAuthProvider{
@@ -134,9 +143,14 @@ func (auth *OidcAuthProvider) SetNewWorkConn(newWorkConnMsg *msg.NewWorkConn) (e
 
 type OidcAuthConsumer struct {
 	BaseConfig
+	OidcServerConfig
 
 	verifier         *oidc.IDTokenVerifier
 	subjectFromLogin string
+}
+
+type OidcTokenClaims struct {
+	Scope string `json:"scope"`
 }
 
 func NewOidcAuthVerifier(baseCfg BaseConfig, cfg OidcServerConfig) *OidcAuthConsumer {
@@ -151,8 +165,9 @@ func NewOidcAuthVerifier(baseCfg BaseConfig, cfg OidcServerConfig) *OidcAuthCons
 		SkipIssuerCheck:   cfg.OidcSkipIssuerCheck,
 	}
 	return &OidcAuthConsumer{
-		BaseConfig: baseCfg,
-		verifier:   provider.Verifier(&verifierConf),
+		BaseConfig:       baseCfg,
+		OidcServerConfig: cfg,
+		verifier:         provider.Verifier(&verifierConf),
 	}
 }
 
@@ -161,7 +176,21 @@ func (auth *OidcAuthConsumer) VerifyLogin(loginMsg *msg.Login) (err error) {
 	if err != nil {
 		return fmt.Errorf("invalid OIDC token in login: %v", err)
 	}
+
+	claims := OidcTokenClaims{}
+	if err := token.Claims(&claims); err != nil {
+		return fmt.Errorf("invalid OIDC claims in login: %v", err)
+	}
+
+	if auth.OidcServerConfig.OidcScope != claims.Scope {
+		return fmt.Errorf("invalid OIDC scope in login. "+
+			"server scope: %s, "+
+			"login scope: %s",
+			auth.OidcServerConfig.OidcScope, claims.Scope)
+	}
+
 	auth.subjectFromLogin = token.Subject
+
 	return nil
 }
 
@@ -176,6 +205,15 @@ func (auth *OidcAuthConsumer) verifyPostLoginToken(privilegeKey string) (err err
 			"new subject: %s",
 			auth.subjectFromLogin, token.Subject)
 	}
+
+	claims := OidcTokenClaims{}
+	if auth.OidcServerConfig.OidcScope != claims.Scope {
+		return fmt.Errorf("invalid OIDC scope in ping. "+
+			"server scope: %s, "+
+			"login scope: %s",
+			auth.OidcServerConfig.OidcScope, claims.Scope)
+	}
+
 	return nil
 }
 
