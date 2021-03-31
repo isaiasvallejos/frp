@@ -207,6 +207,10 @@ func (auth *OidcAuthConsumer) verifyPostLoginToken(privilegeKey string) (err err
 	}
 
 	claims := OidcTokenClaims{}
+	if err := token.Claims(&claims); err != nil {
+		return fmt.Errorf("invalid OIDC claims in ping: %v", err)
+	}
+
 	if auth.OidcServerConfig.OidcScope != claims.Scope {
 		return fmt.Errorf("invalid OIDC scope in ping. "+
 			"server scope: %s, "+
