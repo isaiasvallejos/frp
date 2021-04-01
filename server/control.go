@@ -494,6 +494,12 @@ func (ctl *Control) RegisterProxy(pxyMsg *msg.NewProxy) (remoteAddr string, err 
 		RunID: ctl.runID,
 	}
 
+	err = ctl.authVerifier.VerifyNewProxy(pxyMsg, ctl.loginMsg)
+	if err != nil {
+		err = fmt.Errorf("invalid proxy: %s", err.Error())
+		return
+	}
+
 	// NewProxy will return a interface Proxy.
 	// In fact it create different proxies by different proxy type, we just call run() here.
 	pxy, err := proxy.NewProxy(ctl.ctx, userInfo, ctl.rc, ctl.poolCount, ctl.GetWorkConn, pxyConf, ctl.serverCfg)

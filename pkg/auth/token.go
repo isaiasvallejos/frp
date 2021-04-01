@@ -101,3 +101,7 @@ func (auth *TokenAuthSetterVerifier) VerifyNewWorkConn(newWorkConnMsg *msg.NewWo
 	}
 	return nil
 }
+
+func (auth *TokenAuthSetterVerifier) VerifyNewProxy(pxyMsg *msg.NewProxy, loginMsg *msg.Login) error {
+	return nil
+}

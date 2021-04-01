@@ -335,10 +335,15 @@ func (ctl *Control) msgHandler() {
 			case *msg.ReqWorkConn:
 				go ctl.HandleReqWorkConn(m)
 			case *msg.NewProxyResp:
+				if m.Error != "" {
+					xl.Error("new proxy contains error: %s", m.Error)
+					ctl.conn.Close()
+					return
+				}
 				ctl.HandleNewProxyResp(m)
 			case *msg.Pong:
 				if m.Error != "" {
-					xl.Error("Pong contains error: %s", m.Error)
+					xl.Error("pong contains error: %s", m.Error)
 					ctl.conn.Close()
 					return
 				}

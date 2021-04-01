@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/fatedier/frp/pkg/msg"
@@ -116,8 +117,6 @@ func (auth *OidcAuthProvider) generateAccessToken() (accessToken string, err err
 	if err != nil {
 		return "", fmt.Errorf("couldn't generate OIDC token for login: %v", err)
 	}
-
-	fmt.Print(tokenObj.AccessToken)
 
 	return tokenObj.AccessToken, nil
 }
@@ -243,4 +242,42 @@ func (auth *OidcAuthConsumer) VerifyNewWorkConn(newWorkConnMsg *msg.NewWorkConn)
 	}
 
 	return auth.verifyPostLoginToken(newWorkConnMsg.PrivilegeKey)
+}
+
+func (auth *OidcAuthConsumer) VerifyNewProxy(pxyMsg *msg.NewProxy, loginMsg *msg.Login) error {
+	token, err := auth.verifier.Verify(context.Background(), loginMsg.PrivilegeKey)
+	if err != nil {
+		return fmt.Errorf("invalid OIDC token in new proxy: %v", err)
+	}
+
+	claims := OidcTokenClaims{}
+	if err := token.Claims(&claims); err != nil {
+		return fmt.Errorf("invalid OIDC claims in new proxy: %v", err)
+	}
+
+	scopes := strings.Split(claims.Scope, " ")
+
+	subdomains := make([]string, 0)
+	for _, scope := range scopes {
+		if strings.HasPrefix(scope, "tunnels:domain") {
+			splittedScope := strings.Split(scope, ":")
+
+			if len(splittedScope) == 3 {
+				subdomains = append(subdomains, splittedScope[2])
+			}
+		}
+	}
+	sort.Strings(subdomains)
+
+	i := sort.SearchStrings(subdomains, pxyMsg.SubDomain)
+	matched := i < len(subdomains) && subdomains[i] == pxyMsg.SubDomain
+
+	if !matched {
+		return fmt.Errorf("not found sub domain on OIDC scope in proxy. "+
+			"login subdomains: %s, "+
+			"requested subdomain: %s",
+			subdomains, pxyMsg.SubDomain)
+	}
+
+	return nil
 }
