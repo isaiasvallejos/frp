@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/fatedier/frp/pkg/msg"
 
@@ -115,6 +116,9 @@ func (auth *OidcAuthProvider) generateAccessToken() (accessToken string, err err
 	if err != nil {
 		return "", fmt.Errorf("couldn't generate OIDC token for login: %v", err)
 	}
+
+	fmt.Print(tokenObj.AccessToken)
+
 	return tokenObj.AccessToken, nil
 }
 
@@ -182,8 +186,10 @@ func (auth *OidcAuthConsumer) VerifyLogin(loginMsg *msg.Login) (err error) {
 		return fmt.Errorf("invalid OIDC claims in login: %v", err)
 	}
 
-	if auth.OidcServerConfig.OidcScope != claims.Scope {
-		return fmt.Errorf("invalid OIDC scope in login. "+
+	matched := strings.Contains(claims.Scope, auth.OidcServerConfig.OidcScope)
+
+	if !matched {
+		return fmt.Errorf("not found OIDC scope in login. "+
 			"server scope: %s, "+
 			"login scope: %s",
 			auth.OidcServerConfig.OidcScope, claims.Scope)
@@ -211,8 +217,10 @@ func (auth *OidcAuthConsumer) verifyPostLoginToken(privilegeKey string) (err err
 		return fmt.Errorf("invalid OIDC claims in ping: %v", err)
 	}
 
-	if auth.OidcServerConfig.OidcScope != claims.Scope {
-		return fmt.Errorf("invalid OIDC scope in ping. "+
+	matched := strings.Contains(claims.Scope, auth.OidcServerConfig.OidcScope)
+
+	if !matched {
+		return fmt.Errorf("not found OIDC scope in ping. "+
 			"server scope: %s, "+
 			"login scope: %s",
 			auth.OidcServerConfig.OidcScope, claims.Scope)
